@@ -2,7 +2,7 @@ import json
 import re
 from typing import Callable, Dict, List, Optional, Tuple
 
-from app.utils.pii_redaction import AADHAAR_REDACTION_CATEGORIES, contains_dob
+from app.utils.pii_redaction import DOCUMENT_REDACTION_CATEGORIES, contains_dob
 
 # Load patterns and keywords with error handling
 try:
@@ -262,8 +262,8 @@ def detect_pii(text: str) -> Tuple[List[str], str]:
     detected_pii = _detect_categories(normalized_text)
     document_type = _detect_document_type(normalized_text, detected_pii)
 
-    if document_type == "Aadhaar Card":
-        for category in AADHAAR_REDACTION_CATEGORIES:
+    if document_type in DOCUMENT_REDACTION_CATEGORIES:
+        for category in DOCUMENT_REDACTION_CATEGORIES[document_type]:
             if category not in detected_pii:
                 detected_pii.append(category)
 

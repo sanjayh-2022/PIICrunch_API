@@ -27,6 +27,29 @@ AADHAAR_REDACTION_CATEGORIES = (
     "Phone Number",
 )
 
+VOTER_ID_REDACTION_CATEGORIES = (
+    "Voter ID Number",
+    "Name",
+    "Father's Name",
+    "Date of Birth",
+    "Gender",
+    "Address",
+)
+
+DRIVING_LICENSE_REDACTION_CATEGORIES = (
+    "Driving License Number",
+    "Name",
+    "Father's Name",
+    "Date of Birth",
+    "Address",
+)
+
+DOCUMENT_REDACTION_CATEGORIES = {
+    "Aadhaar Card": AADHAAR_REDACTION_CATEGORIES,
+    "Voter ID": VOTER_ID_REDACTION_CATEGORIES,
+    "Driving License": DRIVING_LICENSE_REDACTION_CATEGORIES,
+}
+
 _SEPARATOR = r"[\s\-.:/]*"
 
 PAN_PATTERN = re.compile(
@@ -151,8 +174,14 @@ def normalize_categories(categories: Optional[Iterable[str]]) -> Set[str]:
 
 def expand_categories_for_document(categories: Optional[Iterable[str]], document_type: str = "") -> Set[str]:
     normalized = normalize_categories(categories)
-    if document_type == "Aadhaar Card" or {"Aadhaar Number", "VID Number"} & normalized:
+    if document_type in DOCUMENT_REDACTION_CATEGORIES:
+        normalized.update(DOCUMENT_REDACTION_CATEGORIES[document_type])
+    if {"Aadhaar Number", "VID Number"} & normalized:
         normalized.update(AADHAAR_REDACTION_CATEGORIES)
+    if "Voter ID Number" in normalized:
+        normalized.update(VOTER_ID_REDACTION_CATEGORIES)
+    if "Driving License Number" in normalized:
+        normalized.update(DRIVING_LICENSE_REDACTION_CATEGORIES)
     if "PAN Number" in normalized:
         normalized.add("Date of Birth")
     return normalized
@@ -336,7 +365,8 @@ def _redact_labelled_names(text: str, categories: Set[str]) -> str:
         text = re.sub(
             r"\b(Name|Full\s*Name|Card\s*Holder|Applicant\s*Name)\b\s*[:\-]?\s*"
             r"[A-Z][A-Za-z .'-]{2,}?"
-            r"(?=\s+(?:D[\s.]*O[\s.]*B|Date\s*of\s*Birth|Birth\s*Date|Address|Male|Female)\b|$)",
+            r"(?=\s+(?:Father'?s?\s*Name|Father\s*/\s*Guardian|S\s*/\s*O|Son\s+of|"
+            r"D[\s.]*O[\s.]*B|Date\s*of\s*Birth|Birth\s*Date|Address|Male|Female)\b|$)",
             lambda match: f"{match.group(1)} XXXX",
             text,
             flags=re.IGNORECASE,
