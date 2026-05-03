@@ -5,6 +5,5 @@ pytesseract
 python_docx
 uvicorn[standard]
 python-multipart
-pdf2image
 opencv-python-headless
 easyocr

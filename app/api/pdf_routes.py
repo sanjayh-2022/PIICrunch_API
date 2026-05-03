@@ -2,15 +2,39 @@ from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from app.utils.pii_detection import detect_pii, detect_docType
 from app.utils.image_processing import redact, redact_specific_pii
-from pdf2image import convert_from_bytes
 from PIL import Image, ImageEnhance
 import numpy as np
 import easyocr
 import io
 import cv2
+import fitz
 
 router = APIRouter()
 reader = easyocr.Reader(['en'], gpu=False)
+
+
+def convert_pdf_to_images(contents: bytes):
+    """Render PDF pages without requiring Poppler on Windows."""
+    try:
+        pdf_document = fitz.open(stream=contents, filetype="pdf")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Unable to read the PDF file.") from exc
+
+    images = []
+    zoom_matrix = fitz.Matrix(2, 2)
+    try:
+        for page in pdf_document:
+            pixmap = page.get_pixmap(matrix=zoom_matrix, alpha=False)
+            image = Image.open(io.BytesIO(pixmap.tobytes("png"))).convert("RGB")
+            images.append(image)
+    finally:
+        pdf_document.close()
+
+    if not images:
+        raise HTTPException(status_code=400, detail="The PDF does not contain any pages.")
+
+    return images
+
 
 async def extract_text_from_images(images):
     """Extract text from a list of images using OCR."""
@@ -30,7 +54,7 @@ async def detect_pii_in_pdf(file: UploadFile = File(...)):
         return JSONResponse(status_code=400, content={"error": "Invalid file format. Only PDFs are supported."})
     
     contents = await file.read()
-    images = convert_from_bytes(contents)
+    images = convert_pdf_to_images(contents)
     
     # Extract text for PII detection
     text = await extract_text_from_images(images)
@@ -44,7 +68,7 @@ async def redact_pii_in_pdf(file: UploadFile = File(...), pii_to_redact: str = F
         return JSONResponse(status_code=400, content={"error": "Invalid file format. Only PDFs are supported."})
     
     contents = await file.read()
-    images = convert_from_bytes(contents)
+    images = convert_pdf_to_images(contents)
     redacted_images = []
     pii_to_redact_list = [item.strip() for item in pii_to_redact.split(",")]
 
